@@ -1,0 +1,8 @@
+<view>
+    <label>Upload</label>
+    <module name="AccountBar" layoutPanel="appHeader"/>
+    <module name="AppBar" layoutPanel="appHeader"/>
+    <module name="ServerSideInclude" layoutPanel="resultsAreaLeft">
+        <param name="src">index.html</param>
+    </module>
+</view>

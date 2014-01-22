@@ -1,0 +1,164 @@
+#main{
+    min-height:400px;
+}
+
+
+.main {
+   height: auto;
+   overflow: hidden;
+}
+
+.rightContainer {
+    width: 250px;
+    float: right;
+}
+
+.leftContainer {
+    padding-right:20px;
+    width: auto;
+    overflow: hidden;
+}
+
+
+#filetarget{
+    height:200px;
+    border:2px dashed #888888;
+    background-color: #f5f5f5;
+    font-size:30px;
+    font-weight:bold;
+    text-align:center;
+    color:#cccccc;
+}
+
+.dragmessage{
+    margin:20px;
+    margin-top:40px;
+}
+
+.file{
+    text-align: left;
+    border:1px solid #ccc;
+    background-color:#fefefe;
+    padding:8px;
+    margin:10px 43px 0 8px;
+    font-weight:normal;
+    font-size:10px;
+}
+
+.file.uploading{
+    background-color:#ffffdd;
+}
+
+.file.uploadfinished{
+    background-color:#F0FFE8;
+}
+
+.file.uploaderror{
+    border:1px solid red;
+}
+
+.file.aborted{
+    background-color:#fffff0;
+}
+
+.file .details{
+    padding-bottom:5px;
+    color:#5e5e5e;
+}
+
+.file .name{
+    font-weight:bold;
+    font-size:16px;
+}
+
+.file.aborted .details{
+    color:#ccc;
+}
+
+.file .message{
+    color:red;
+    padding-top:4px;
+    font-size:12px;
+}
+
+.file .size{
+    font-size:10px;
+    padding-left:15px;
+}
+
+.file .close{
+    color:#5e5e5e;
+    font-size:15px;
+}
+
+
+.file .progressout{
+    margin-top:5px;
+    border:1px solid #fff;
+}
+
+.file .progress{
+    border:1px solid #ffffff;
+    background-color:#C7D8FC;
+    height:8px;
+    width:0%;
+}
+
+.speed{
+    float:right;
+}
+
+.eta{
+    float:right;
+}
+
+.aborted .icon-close{
+    display:none;
+}
+.aborted .icon-rotate{
+    display:inline-block;
+}
+
+.header {
+    text-align: right;
+    background-color:#f5f5f5;
+    border-bottom:2px solid #ccc;
+    padding:5px;
+}
+.header .title{
+    padding:5px;
+    float:left;
+    font-size:14px;
+}
+.header .buttonset{
+    float:right;
+}
+
+.header .icon-play{
+    display:none;
+}
+.header .active .icon-pause{
+    display:none;
+}
+.header .active .icon-play{
+    display:inline-block;
+}
+
+.statusContainer{
+    position:absolute;bottom:-16px;right:1px;
+    opacity: .5;
+}
+
+.totalSize{
+    font-size:10px;
+}
+
+.pendingFiles .btnAbort{
+    display:none;
+}
+.pendingFiles .progressout{
+    display:none;
+}
+.finishedFiles .progressout{
+    display:none;
+}
