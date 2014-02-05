@@ -1,5 +1,6 @@
 $(document).ready(function(){
 
+    var underscore = window._lodash;
     underscore.templateSettings = {
       interpolate: /\{\{(.+?)\}\}/g
     };
@@ -19,7 +20,7 @@ $(document).ready(function(){
         '?action=edit&redirect_override_cancel=%2Fmanager%2Fuploader%2Fdatainputstats&def.spl-ctrl_sourcetypeSelect=auto&def.spl-ctrl_switcher=oneshot&def.spl-ctrl_EnableAdvanced=1&app_only=False&preflight=preview&def.name='
 
     var updateSize = underscore.debounce(function(){
-            $('.uploading-wrapper').find('.totalSize').text(humanFileSize(r.getSize()));
+        $('.uploading-wrapper').find('.totalSize').text(humanFileSize(r.getSize()));
     },500);
 
     var updateServerFileList = underscore.debounce(function(){
