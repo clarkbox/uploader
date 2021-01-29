@@ -15,7 +15,7 @@ from splunk.appserver.mrsparkle.lib.routes import route
 from splunk.appserver.mrsparkle.lib import jsonresponse
 
 logger = logging.getLogger('splunk')
-settings = splunk.clilib.cli_common.getConfStanza('app', 'ui')
+settings = splunk.clilib.cli_common.getConfStanza('uploader', 'paths')
 savepath = settings['savepath']
 pendingPath = settings['temppath']
 

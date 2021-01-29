@@ -4,7 +4,7 @@ from splunk.appserver.mrsparkle.lib import util
 %>
 <%
 app_name=cherrypy.request.path_info.split('/')[-2]
-settings = splunk.clilib.cli_common.getConfStanza('app', 'ui')
+settings = splunk.clilib.cli_common.getConfStanza('uploader', 'paths')
 savepath = settings['savepath']
 %>
 <script>
