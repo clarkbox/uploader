@@ -1,6 +1,37 @@
-$(document).ready(function(){
+require([
+    'jquery',
+    'underscore',
+    'resumable',
+    'splunkjs/mvc/utils',
+    'splunkjs/mvc',
+    'splunkjs/mvc/searchmanager',
+    'splunkjs/mvc/simplexml/ready!'
+], function ($, underscore, Resumable, utils, mvc, SearchManager) {
+    // TODO - Check proper import of Resumable
 
-    var underscore = window._lodash;
+
+    let formkey = `${utils.getFormKey()|h}`;   // TODO - Need to write the logic to update |h incase needed.
+
+
+    let savePath = "";
+    // Defining search and search manager
+    var searchString = '| rest /servicesNS/-/uploader/configs/conf-uploader splunk_server=local | search "eai:acl.app"="uploader" | table *';
+    var searchManager = new SearchManager({
+        preview: true,
+        autostart: true,
+        search: searchString,
+        cache: false
+    });
+    // Processing results search manager.
+    var searchManagerResults = searchManager.data("results", {count: 0});
+    searchManagerResults.on('data', function () {
+        if (searchManagerResults.data()) {
+            $.each(searchManagerResults.data().rows, function (index, row) {
+                // TODO - Read for savepath and temppath here
+            });
+        }
+    });
+
     underscore.templateSettings = {
       interpolate: /\{\{(.+?)\}\}/g
     };
@@ -37,6 +68,8 @@ $(document).ready(function(){
                 if(file.finished){
                     size[0] = size[0]+file.size;
                     finishedList.append(fileElm);
+
+                    // TODO - Check for correct value if savePath
                     var path = savePath + '/' + file.name;
                     var link = managerIndexLink + encodeURIComponent(path);
                     fileElm.append('<div class="indexLink"><a href="'+link+'" target="_new">Index this file in Splunk...</a></div>');
