@@ -46,7 +46,7 @@ require([
         pendingList = $('.pendingFiles'),
         fileProgressStates = {},
         paused = false,
-        statusUrl = Splunk.util.make_url('custom','uploader','upload'),
+        statusUrl = Splunk.util.make_url('uploader','upload'),  // TODO - This is upload rest endpoint which needs to be tested
         managerIndexLink = '/manager/uploader/data/inputs/monitor/_new' +
         '?action=edit&redirect_override_cancel=%2Fmanager%2Fuploader%2Fdatainputstats&def.spl-ctrl_sourcetypeSelect=auto&def.spl-ctrl_switcher=oneshot&def.spl-ctrl_EnableAdvanced=1&app_only=False&preflight=preview&def.name='
 
@@ -55,7 +55,12 @@ require([
     },500);
 
     var updateServerFileList = underscore.debounce(function(){
-        $.ajax('/custom/uploader/service/list').done(function(files){
+        let service = mvc.createService();
+        service.get("/service/list", {}, function(error, response){
+            let files = undefined;
+            // TODO - Need to update in case files are coming in response
+            // TODO - check for error and response properly
+            
             finishedList.empty();
             pendingList.empty();
             var size = [0,0];
@@ -86,8 +91,8 @@ require([
     }, 500);
 
     var r = new Resumable({
-        target: statusUrl,
-        query: {'splunk_form_key':formkey},
+        target: statusUrl,  // TODO - As /upload/ endpoint is being tested by third-party this needs to be tested
+        query: {'splunk_form_key':formkey},  // TODO - This need to be tested
         chunkSize: 5*1024*1024
     });
 
@@ -219,20 +224,30 @@ require([
 
     btnPurgePending.on('click', function(){
         if(confirm('Are you sure you want to\nDELETE ALL PENDING UPLOADS on the server?')){
-            $.ajax('/custom/uploader/service/removepending').done(function(){
-                updateServerFileList();
-            }).error(function(){
-                alert('There was an error while deleting. Check web_service.log for more info.');
+            let service = mvc.createService();
+            service.get("/service/removepending", {}, function(error, response){
+                if (error){
+                    // TODO - Test for error and response properly
+                    alert('There was an error while deleting. Check web_service.log for more info.');
+                }
+                else{
+                    updateServerFileList();
+                }
             });
         }
     });
 
     btnDeleteAll.on('click', function(){
         if(confirm('Are you sure you want to\nDELETE ALL UPLOADED FILES on the server?')){
-            $.ajax('/custom/uploader/service/removeall').done(function(){
-                updateServerFileList();
-            }).error(function(){
-                alert('There was an error while deleting. Check web_service.log for more info.');
+            let service = mvc.createService();
+            service.get("/service/removeall", {}, function(error, response){
+                if (error){
+                    // TODO - Check proper value for error and response
+                    alert('There was an error while deleting. Check web_service.log for more info.');
+                }
+                else{
+                    updateServerFileList();
+                }
             });
         }
     });
@@ -243,10 +258,15 @@ require([
         var fileName = fileElm.data('filename');
 
         if(confirm('Are you sure you want to delete '+ fileName)){
-            $.ajax('/custom/uploader/service/remove/'+ fileName).done(function(){
-                fileElm.remove();
-            }).error(function(){
-                alert('There was an error while deleting. Check web_service.log for more info.');
+            let service = mvc.createService();
+            service.get("/service/remove/" + fileName, {}, function(error, response){
+                if (error){
+                    // TODO - Check proper value for error and response
+                    alert('There was an error while deleting. Check web_service.log for more info.');
+                }
+                else{
+                    fileElm.remove();
+                }
             });
         }
     });
