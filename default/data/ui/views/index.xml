@@ -1,4 +1,4 @@
-<form script="js/index.js" stylesheet="css/main.css">
+<form script="js/resumable.js, js/index.js" stylesheet="css/main.css">
   <label>Upload</label>
   <row>
     <panel>
@@ -63,29 +63,6 @@
           </div>
 
         </div>
-        <script type="text/template" id="fileTemplate">
-          <div class="file">
-            <div class="details">
-              <div class="splunk-components" style="float: right">
-                <button type="button" class="btn btn-default btnRetry" style="display:none;" tooltip="Retry">
-                  <span class="icon-rotate"></span>
-                </button>
-                <button type="button" class="btn btn-default btnAbort" tooltip="Cancel">
-                  <span class="icon-close"></span>
-                </button>
-              </div>
-              <div>
-                <span class="name">{{name}}</span>
-                <span class="size">{{size}}</span>
-              </div>
-            </div>
-            <div class="progressout">
-              <div class="progress"></div>
-              <div class="speed"></div>
-            </div>
-            <div class="message"></div>
-          </div>
-        </script>
       </html>
     </panel>
   </row>

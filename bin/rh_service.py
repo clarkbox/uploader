@@ -34,16 +34,8 @@ class ServiceRestcall(admin.MConfigHandler):
         # Set up the valid parameters
         for arg in ['data']:
             self.supportedArgs.addOptArg(arg)
-        
+
         self.get_paths()
-
-
-    def render_json(self, response_data, set_mime="text/json"):
-        if isinstance(response_data, jsonresponse.JsonResponse):
-            response = response_data.toJson().replace("</", "<\\/")
-        else:
-            response = json.dumps(response_data).replace("</", "<\\/")
-        return " " * 256 + "\n" + response
 
 
     def get_paths(self):
@@ -61,10 +53,9 @@ class ServiceRestcall(admin.MConfigHandler):
             logger.error(
                 "Unable to fetch file paths from uploader.conf file." + str(e))
             raise
-    
 
     def action_list(self, conf_info):
-                files = []
+        files = []
         savedFiles = []
         if os.path.exists(self.savepath):
             savedFiles = os.listdir(self.savepath)
@@ -107,54 +98,49 @@ class ServiceRestcall(admin.MConfigHandler):
                     files.append(
                         {'name': fname, 'size': size, 'isFile': isFile, 'finished': False, 'parts': parts})
 
-        return self.render_json(files)
-        # TODO - Need to update this return statement with adding data to conf_info object.
-        # something like this - conf_info['action']['api_id'] = api_id
-        # We also need to update the JS file accordingly
-        # index.js - $.ajax('/custom/uploader/service/list')
+        conf_info['response']['files'] = files
     
     
-    def action_remove(conf_file, path):
-        # TODO - Need to extract fname field
+    def action_remove(self, conf_info, fname):
         fname = ''
-        os.remove(os.path.join(self.savepath,fname))
-        return self.render_json(fname)
-        # TODO - $.ajax('/custom/uploader/service/remove/'
+        os.remove(os.path.join(self.savepath))
+        conf_info['response']['file_name'] = fname
     
 
-    def action_removeall(conf_file):
+    def action_removeall(self, conf_info):
         if os.path.exists(self.savepath):
-            logger.warn('purge uploaded files '+ self.savepath)
+            logger.warning('purge uploaded files '+ self.savepath)
             shutil.rmtree(self.savepath)
-        return self.render_json([0])
-        # TODO - $.ajax('/custom/uploader/service/removeall'
-    
+        conf_info['response']['success'] = [0]
+
+
     def action_removepending(self, conf_info):
         if os.path.exists(self.pendingPath):
-            logger.warn('purge pending files '+ self.pendingPath)
+            logger.warning('purge pending files '+ self.pendingPath)
             shutil.rmtree(self.pendingPath)
-            
-        return self.render_json([0])
+        conf_info['response']['success'] = [0]
 
 
     def handleList(self, conf_info):
-        # TODO - Need to check self.callerArgs should have some value that determines the path
-        # like $.ajax('/custom/uploader/service/removepending')
-        action = ''
-        path = ''
+
+        data = json.loads(self.callerArgs['data'][0])
+        action = data['action']
+        filename = None
+        if 'filename' in data:
+            filename = data['filename']
         
         if action == 'list':
             self.action_list(conf_info)
         elif action == 'remove':
-            self.action_remove(conf_info, path)
+            self.action_remove(conf_info, filename)
         elif action == 'removeall':
-            self.action_removeall(conf_file)
+            self.action_removeall(conf_info)
         elif action == 'removepending':
             self.action_removepending(conf_info)
 
 
     def handleEdit(self, conf_info):
-        logger.warn("Post method is not implemented.")        
+        logger.warning("Post method is not implemented.")        
 
 
 if __name__ == "__main__":

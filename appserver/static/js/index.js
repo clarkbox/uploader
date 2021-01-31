@@ -1,21 +1,17 @@
 require([
     'jquery',
     'underscore',
-    'resumable',
     'splunkjs/mvc/utils',
     'splunkjs/mvc',
     'splunkjs/mvc/searchmanager',
     'splunkjs/mvc/simplexml/ready!'
-], function ($, underscore, Resumable, utils, mvc, SearchManager) {
-    // TODO - Check proper import of Resumable
+], function ($, underscore, utils, mvc, SearchManager) {
 
-
-    let formkey = `${utils.getFormKey()|h}`;   // TODO - Need to write the logic to update |h incase needed.
-
+    let formkey = document.cookie.match(/splunkweb_csrf_token_8000=(\d+)/)[1];  // OLD - `${utils.getFormKey()|h}`
 
     let savePath = "";
     // Defining search and search manager
-    var searchString = '| rest /servicesNS/-/uploader/configs/conf-uploader splunk_server=local | search "eai:acl.app"="uploader" | table *';
+    var searchString = '| rest /servicesNS/-/uploader/configs/conf-uploader/paths splunk_server=local | search "eai:acl.app"="uploader" | table savepath, temppath';
     var searchManager = new SearchManager({
         preview: true,
         autostart: true,
@@ -27,7 +23,7 @@ require([
     searchManagerResults.on('data', function () {
         if (searchManagerResults.data()) {
             $.each(searchManagerResults.data().rows, function (index, row) {
-                // TODO - Read for savepath and temppath here
+                savePath = row[0];  // savepath
             });
         }
     });
@@ -35,8 +31,33 @@ require([
     underscore.templateSettings = {
       interpolate: /\{\{(.+?)\}\}/g
     };
-    var fileItemTemplate = $('#fileTemplate').html(),
-        fileTemplate = underscore.template(fileItemTemplate),
+
+    let fileItemTemplate = `
+    <div class="file">
+        <div class="details">
+            <div class="splunk-components" style="float: right">
+                <button type="button" class="btn btn-default btnRetry" style="display:none;" tooltip="Retry">
+                    <span class="icon-rotate"></span>
+                </button>
+                <button type="button" class="btn btn-default btnAbort" tooltip="Cancel">
+                    <span class="icon-close"></span>
+                </button>
+            </div>
+            <div>
+                <span class="name">{{name}}</span>
+                <span class="size">{{size}}</span>
+            </div>
+        </div>
+        <div class="progressout">
+            <div class="progress"></div>
+            <div class="speed"></div>
+        </div>
+        <div class="message"></div>
+    </div>
+    `;
+    // OLD - var fileItemTemplate = $('#fileTemplate').html(),
+
+    var fileTemplate = underscore.template(fileItemTemplate),
         fileList = $('.uploadingFiles'),
         btnPauseAll = $('.btnPauseAll'),
         btnCancelAll = $('.btnStopAll'),
@@ -46,18 +67,29 @@ require([
         pendingList = $('.pendingFiles'),
         fileProgressStates = {},
         paused = false,
-        statusUrl = Splunk.util.make_url('uploader','upload'),  // TODO - This is upload rest endpoint which needs to be tested
+        statusUrl = '/en-US/splunkd/__raw/servicesNS/-/uploader/upload',   // OLD - Splunk.util.make_url('uploader','upload'),
         managerIndexLink = '/manager/uploader/data/inputs/monitor/_new' +
         '?action=edit&redirect_override_cancel=%2Fmanager%2Fuploader%2Fdatainputstats&def.spl-ctrl_sourcetypeSelect=auto&def.spl-ctrl_switcher=oneshot&def.spl-ctrl_EnableAdvanced=1&app_only=False&preflight=preview&def.name='
 
     var updateSize = underscore.debounce(function(){
+        debugger;
         $('.uploading-wrapper').find('.totalSize').text(humanFileSize(r.getSize()));
     },500);
 
     var updateServerFileList = underscore.debounce(function(){
         let service = mvc.createService();
-        service.get("/service/list", {}, function(error, response){
-            let files = undefined;
+        let data = {
+            "action": "list"
+        }
+        data = JSON.stringify(data);
+        service.get("/service", {"data": data}, function(error, response){
+            debugger;
+            if (error){
+                console.error("Error in getting file list.");
+                console.error(error);
+                return;
+            }
+            let files = response.data.entry[0].content.files;
             // TODO - Need to update in case files are coming in response
             // TODO - check for error and response properly
             
@@ -91,8 +123,8 @@ require([
     }, 500);
 
     var r = new Resumable({
-        target: statusUrl,  // TODO - As /upload/ endpoint is being tested by third-party this needs to be tested
-        query: {'splunk_form_key':formkey},  // TODO - This need to be tested
+        target: statusUrl,
+        headers: {'X-Requested-With': 'XMLHttpRequest', 'X-Splunk-Form-Key': formkey},   // TODO - query: {'splunk_form_key':formkey},
         chunkSize: 5*1024*1024
     });
 
@@ -166,6 +198,7 @@ require([
     });
 
     r.on('fileSuccess', function(file, message){
+        debugger;
         console.log('file success', file);
         window.setTimeout(function(){
             file.elm.hide('slow', function(){
@@ -181,6 +214,7 @@ require([
     });
 
     r.on('fileError', function(file, message){
+        debugger;
         try{
             message = JSON.parse(message);
         }catch(e){}
@@ -201,6 +235,7 @@ require([
     });
 
     btnPauseAll.on('click', function(){
+        debugger;
         if(!paused){
             r.pause();
             btnPauseAll.addClass('active');
@@ -214,6 +249,7 @@ require([
     });
 
     btnCancelAll.on('click', function(){
+        debugger;
         fileList.find('.file').each(function(i, elm){
             elm.remove();
         });
@@ -223,9 +259,15 @@ require([
     });
 
     btnPurgePending.on('click', function(){
+        debugger;
         if(confirm('Are you sure you want to\nDELETE ALL PENDING UPLOADS on the server?')){
             let service = mvc.createService();
-            service.get("/service/removepending", {}, function(error, response){
+            let data = {
+                "action": "removepending"
+            }
+            data = JSON.stringify(data);
+            service.get("/service", {"data": data}, function(error, response){
+                debugger;
                 if (error){
                     // TODO - Test for error and response properly
                     alert('There was an error while deleting. Check web_service.log for more info.');
@@ -238,9 +280,15 @@ require([
     });
 
     btnDeleteAll.on('click', function(){
+        debugger;
         if(confirm('Are you sure you want to\nDELETE ALL UPLOADED FILES on the server?')){
             let service = mvc.createService();
-            service.get("/service/removeall", {}, function(error, response){
+            let data = {
+                "action": "removeall"
+            }
+            data = JSON.stringify(data);
+            service.get("/service", {"data": data}, function(error, response){
+                debugger;
                 if (error){
                     // TODO - Check proper value for error and response
                     alert('There was an error while deleting. Check web_service.log for more info.');
@@ -253,13 +301,20 @@ require([
     });
 
     finishedList.on('click', '.btnAbort', function(event){
+        debugger;
         var target = $(event.target);
         var fileElm = target.closest('.file');
         var fileName = fileElm.data('filename');
 
         if(confirm('Are you sure you want to delete '+ fileName)){
             let service = mvc.createService();
-            service.get("/service/remove/" + fileName, {}, function(error, response){
+            let data = {
+                "action": "remove",
+                "filename": fileName
+            }
+            data = JSON.stringify(data);
+            service.get("/service", {"data": data}, function(error, response){
+                debugger;
                 if (error){
                     // TODO - Check proper value for error and response
                     alert('There was an error while deleting. Check web_service.log for more info.');
@@ -283,5 +338,4 @@ require([
         } while(bytes >= thresh);
         return bytes.toFixed(1)+' '+units[u];
     }
-
 });
