@@ -30,6 +30,7 @@ jobs:
         run: |
           cd uploader
           rm -rf .github
+          rm -rf .git
           cd ..
           find uploader -type f -exec chmod 644 '{}' \;
           find uploader -type d -exec chmod 755 '{}' \;
