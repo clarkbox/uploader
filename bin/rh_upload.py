@@ -3,10 +3,12 @@ import json
 import logging
 import shutil
 import cgi
+import re
+import urllib.parse as urlparse   # TODO - may be python3 only, need to check
 
-import splunk.admin as admin
+
+import splunk
 from splunk import rest
-from rest_error import RestError
 
 
 APP_NAME = 'uploader'
@@ -16,36 +18,9 @@ STANZA_NAME = 'paths'
 
 logger = logging.getLogger('splunk')
 
-import sys, os
-sys.path.append(os.path.join('/opt/splunk','etc','apps','SA-VSCode','bin'))
-import splunk_debug as dbg
-dbg.enable_debugging(port=5686, timeout=120)
 
-
-class UploaderException(Exception):
-    pass
-
-
-class ServiceRestcall(admin.MConfigHandler):
-    '''
-    Set up supported arguments
-    '''
-
-    savepath = '/my/upload/path'
-    pendingPath = '/tmp/uploader_pending'
-
-    # Static variables
-    def setup(self):
-        """
-        Sets the input arguments
-        :return:
-        """
-
-        # Set up the valid parameters
-        for arg in ['resumableIdentifier', 'resumableFilename', 'resumableChunkNumber', 'resumableTotalSize', 'resumableChunkSize', 'resumableCurrentChunkSize', 'resumableRelativePath', 'resumableType', 'file']:
-            self.supportedArgs.addOptArg(arg)
-
-        self.get_paths()
+class Upload(splunk.rest.BaseRestHandler):
+    """Class for getting UI validation message through custom endpoint."""
 
     def sortFiles(self, a, b):
         a = a[a.rfind('.')+1:]
@@ -83,11 +58,12 @@ class ServiceRestcall(admin.MConfigHandler):
             destination.close()
             shutil.rmtree(tempDir)
 
+
     def get_paths(self):
         # Get file paths from conf file
         try:
             _, serverContent = rest.simpleRequest(
-                "/servicesNS/nobody/{}/configs/conf-{}?output_mode=json".format(APP_NAME, CONF_FILE), sessionKey=self.getSessionKey())
+                "/servicesNS/nobody/{}/configs/conf-{}?output_mode=json".format(APP_NAME, CONF_FILE), sessionKey=self.sessionKey)
             data = json.loads(serverContent)['entry']
             for i in data:
                 if i['name'] == STANZA_NAME:
@@ -98,52 +74,105 @@ class ServiceRestcall(admin.MConfigHandler):
             logger.error(
                 "Unable to fetch file paths from uploader.conf file." + str(e))
             raise
+    
 
-    def handleRequest(self, request_method, conf_info):
+    def raise_error(self, error_code=500, message=None):
+        """
+        Use this function to raise HTTP error
+        """
+        self.response.setHeader('content-type', 'application/json')
+        self.response.setStatus(error_code)
+        if message:
+            response = json.dumps('{"message": {}}'.format(message))
+            self.response.write(response)
 
+
+    def return_message(self, message, status_code=200):
+        """
+        Use this function to provide response message
+        """
+        self.response.setHeader('content-type', 'application/json')
+        response = json.dumps('{"message": {}}'.format(message))
+        self.response.write(response)
+    
+
+    def parse_payload(self, content_type, payload):
+        """
+        This function parses the payload from normal format to key-value pair dictionary.
+        Call this function like:
+            content_type = self.request['headers']['content-type']
+            payload_in_parts = self.parsePayload(content_type, self.request['payload'])
+        """
+        posted_parts = {}
+        if re.match('application/x-www-form-urlencoded', content_type):
+            posted_parts = urlparse.parse_qs(payload)
+        elif re.search('form-data', content_type):
+            # First, determine the separator (boundary)
+            parsedBoundary = re.search(r'boundary\s*=\s*(?P<boundary>\S+)', content_type)
+            boundary = parsedBoundary.group('boundary')
+            # Now, split the payload
+            parts = payload.split('--' + boundary)
+            for part in parts:
+                try:
+                    parsedPart = re.search('Content-Disposition: form-data; name=\"(?P<name>[^\"]+)\"(; filename=\"(?P<filename>[^\"]+)\")?(\r?\nContent-Type:[^\r\n]*)?(\r?\nContent-Length:[^\r\n]*)?\r?\n\r?\n(?P<content>[^$]*)', part)
+                    content = parsedPart.group('content')[:-2] if parsedPart.group('content')[-2] == '\r' else parsedPart.group('content')[:-1]
+                    posted_parts[parsedPart.group('name')] = content    # .strip()
+                except:
+                    pass
+        return posted_parts
+
+
+    def handle_request(self, request_method):
         logger.info("Just for testing, Vatsalllll.")
         # TODO - Need to remove above line.
 
-        resumableChunkNumber = ''
-        if resumableChunkNumber in self.callerArgs.data:
-            resumableChunkNumber = self.callerArgs.data['resumableChunkNumber'][0]
-
-        resumableChunkSize = ''
-        if resumableChunkSize in self.callerArgs.data:
-            resumableChunkSize = self.callerArgs.data['resumableChunkSize'][0]
-
-        resumableCurrentChunkSize = ''
-        if resumableCurrentChunkSize in self.callerArgs.data:
-            resumableCurrentChunkSize = self.callerArgs.data['resumableCurrentChunkSize'][0]
-
-        resumableFilename = ''
-        if resumableFilename in self.callerArgs.data:
-            resumableFilename = self.callerArgs.data['resumableFilename'][0]
-
-        resumableIdentifier = ''
-        if resumableIdentifier in self.callerArgs.data:
-            resumableIdentifier = self.callerArgs.data['resumableIdentifier'][0]
-
-        resumableRelativePath = ''
-        if resumableRelativePath in self.callerArgs.data:
-            resumableRelativePath = self.callerArgs.data['resumableRelativePath'][0]
-
-        resumableTotalSize = ''
-        if resumableTotalSize in self.callerArgs.data:
-            resumableTotalSize = self.callerArgs.data['resumableTotalSize'][0]
-
-        resumableType = ''
-        if resumableType in self.callerArgs.data:
-            resumableType = self.callerArgs.data['resumableType'][0]
-
+        content_type = self.request['headers']['content-type']
+        payload_in_parts = self.parse_payload(content_type, self.request['payload'])
+        
         with open('/opt/splunk/etc/apps/uploader/local/logs.txt', 'a+') as f:
             # TODO - Need to remove this
             f.write("\n")
-            f.write("callerArgs data: " + str(self.callerArgs.data))
+            f.write("payload in parts: " + str(payload_in_parts))
 
-        fs = None   # file field from request parameter
-        # TODO - get above fields from self.callerArgs
-        # TODO - Need to update kwargs with self.callerArgs
+        
+        self.get_paths()
+
+        resumableChunkNumber = ''
+        if resumableChunkNumber in payload_in_parts:
+            resumableChunkNumber = payload_in_parts['resumableChunkNumber']
+
+        resumableChunkSize = ''
+        if resumableChunkSize in payload_in_parts:
+            resumableChunkSize = payload_in_parts['resumableChunkSize']
+
+        resumableCurrentChunkSize = ''
+        if resumableCurrentChunkSize in payload_in_parts:
+            resumableCurrentChunkSize = payload_in_parts['resumableCurrentChunkSize']
+
+        resumableFilename = ''
+        if resumableFilename in payload_in_parts:
+            resumableFilename = payload_in_parts['resumableFilename']
+
+        resumableIdentifier = ''
+        if resumableIdentifier in payload_in_parts:
+            resumableIdentifier = payload_in_parts['resumableIdentifier']
+
+        resumableRelativePath = ''
+        if resumableRelativePath in payload_in_parts:
+            resumableRelativePath = payload_in_parts['resumableRelativePath']
+
+        resumableTotalSize = ''
+        if resumableTotalSize in payload_in_parts:
+            resumableTotalSize = payload_in_parts['resumableTotalSize']
+
+        resumableType = ''
+        if resumableType in payload_in_parts:
+            resumableType = payload_in_parts['resumableType']
+        
+        file = ''
+        if file in payload_in_parts:
+            file = payload_in_parts['file']
+
 
         if resumableIdentifier:
             logger.error('resumableIdentifier expected in args')
@@ -151,7 +180,7 @@ class ServiceRestcall(admin.MConfigHandler):
                 # TODO - Need to remove this
                 f.write("\n")
                 f.write("resumableIdentifier expected in args")
-            raise RestError(500, "resumableIdentifier expected in args")
+            self.raise_error(500, "resumableIdentifier expected in args")
             # OLD - raise cherrypy.HTTPError(500)
 
         chunkFileName = resumableFilename + '.' + resumableChunkNumber
@@ -173,7 +202,7 @@ class ServiceRestcall(admin.MConfigHandler):
                     # TODO - Need to remove this
                     f.write("\n")
                     f.write("File not found")
-                raise RestError(404, "Uploader: File not found.")
+                self.raise_error(404, "Uploader: File not found.")
                 # OLD - raise cherrypy.HTTPError(404)
                 
         elif request_method == 'POST':
@@ -187,14 +216,12 @@ class ServiceRestcall(admin.MConfigHandler):
                     # TODO - Need to remove this
                     f.write("\n")
                     f.write("File already exist.")
-                conf_info['response']['errorcode'] = 1
-                raise RestError(500, 'File named ' + resumableFilename + ' exists.')
+                self.raise_error(500, 'File named ' + resumableFilename + ' exists.')
                 # OLD - cherrypy.response.status = 500
                 # return self.render_json({'errorcode': 1,'message':'File named '+ resumableFilename +' exists.' })
 
-            # TODO - I need to understand this below lines, where file is coming from and how that is FieldStorage's object?
-            # fs = kwargs.get('file')
-            if isinstance(fs, cgi.FieldStorage):
+            # OLD - if isinstance(fs, cgi.FieldStorage):
+            if file:
                 if not os.path.exists(chunkDir):
                     try:
                         os.makedirs(chunkDir)
@@ -211,12 +238,18 @@ class ServiceRestcall(admin.MConfigHandler):
                         pass
 
                 newFile = open(tempChunkFilePath, 'wb')
+                
+                '''
+                # OLD
                 while 1:
                     buf = fs.file.read(1024)
                     if buf:
                         newFile.write(buf)
                     else:
                         break
+                '''
+                newFile.write(file)
+
                 newFile.close()
                 shutil.move(tempChunkFilePath, chunkFilePath)
 
@@ -227,16 +260,13 @@ class ServiceRestcall(admin.MConfigHandler):
                 # TODO - Need to remove this
                 f.write("\n")
                 f.write("method not implemented.")
-            raise RestError(404, "Uploader: This method is not implemented.")
+            self.raise_error(404, "Uploader: This method is not implemented.")
             # OLD - raise cherrypy.HTTPError(404)
             # TODO - Check OLD to before final review
 
-    def handleList(self, conf_info):
-        self.handleRequest('GET', conf_info)
 
-    def handleEdit(self, conf_info):
-        self.handleRequest('POST', conf_info)
+    def handle_GET(self):
+        self.handle_request("GET")
 
-
-if __name__ == "__main__":
-    admin.init(ServiceRestcall, admin.CONTEXT_APP_AND_USER)
+    def handle_POST(self):
+        self.handle_request("POST")
