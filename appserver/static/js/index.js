@@ -72,7 +72,6 @@ require([
         '?action=edit&redirect_override_cancel=%2Fmanager%2Fuploader%2Fdatainputstats&def.spl-ctrl_sourcetypeSelect=auto&def.spl-ctrl_switcher=oneshot&def.spl-ctrl_EnableAdvanced=1&app_only=False&preflight=preview&def.name='
 
     var updateSize = underscore.debounce(function(){
-        debugger;
         $('.uploading-wrapper').find('.totalSize').text(humanFileSize(r.getSize()));
     },500);
 
@@ -83,15 +82,12 @@ require([
         }
         data = JSON.stringify(data);
         service.get("/service", {"data": data}, function(error, response){
-            debugger;
             if (error){
                 console.error("Error in getting file list.");
                 console.error(error);
                 return;
             }
-            let files = response.data.entry[0].content.files;
-            // TODO - Need to update in case files are coming in response
-            // TODO - check for error and response properly
+            let files = JSON.parse(response.data.entry[0].content.files);
             
             finishedList.empty();
             pendingList.empty();
@@ -106,7 +102,6 @@ require([
                     size[0] = size[0]+file.size;
                     finishedList.append(fileElm);
 
-                    // TODO - Check for correct value if savePath
                     var path = savePath + '/' + file.name;
                     var link = managerIndexLink + encodeURIComponent(path);
                     fileElm.append('<div class="indexLink"><a href="'+link+'" target="_new">Index this file in Splunk...</a></div>');
@@ -124,7 +119,7 @@ require([
 
     var r = new Resumable({
         target: statusUrl,
-        headers: {'X-Requested-With': 'XMLHttpRequest', 'X-Splunk-Form-Key': formkey},   // TODO - query: {'splunk_form_key':formkey},
+        headers: {'X-Requested-With': 'XMLHttpRequest', 'X-Splunk-Form-Key': formkey},   // OLD - query: {'splunk_form_key':formkey},
         chunkSize: 5*1024*1024
     });
 
@@ -198,7 +193,6 @@ require([
     });
 
     r.on('fileSuccess', function(file, message){
-        debugger;
         console.log('file success', file);
         window.setTimeout(function(){
             file.elm.hide('slow', function(){
@@ -214,7 +208,6 @@ require([
     });
 
     r.on('fileError', function(file, message){
-        debugger;
         try{
             message = JSON.parse(message);
         }catch(e){}
@@ -222,7 +215,7 @@ require([
         if(message.errorcode>0 && message.message){
             file.elm.find('.message').text('Upload Failed. '+ message.message);
         }else{
-            file.elm.find('.message').text('Upload Failed. Check web_service.log for error details.');
+            file.elm.find('.message').text('Upload Failed. Check _internal logs for error details.');
         }
 
         file.elm.find('.btnRetry').show();
@@ -259,7 +252,6 @@ require([
     });
 
     btnPurgePending.on('click', function(){
-        debugger;
         if(confirm('Are you sure you want to\nDELETE ALL PENDING UPLOADS on the server?')){
             let service = mvc.createService();
             let data = {
@@ -267,10 +259,8 @@ require([
             }
             data = JSON.stringify(data);
             service.get("/service", {"data": data}, function(error, response){
-                debugger;
                 if (error){
-                    // TODO - Test for error and response properly
-                    alert('There was an error while deleting. Check web_service.log for more info.');
+                    alert('There was an error while deleting. Check _internal logs for more info.');
                 }
                 else{
                     updateServerFileList();
@@ -291,7 +281,7 @@ require([
                 debugger;
                 if (error){
                     // TODO - Check proper value for error and response
-                    alert('There was an error while deleting. Check web_service.log for more info.');
+                    alert('There was an error while deleting. Check _internal logs for more info.');
                 }
                 else{
                     updateServerFileList();

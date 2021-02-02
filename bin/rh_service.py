@@ -35,21 +35,35 @@ class ServiceRestcall(admin.MConfigHandler):
         for arg in ['data']:
             self.supportedArgs.addOptArg(arg)
 
-        self.get_paths()
-
 
     def get_paths(self):
         # Get file paths from conf file
         try:
             _, serverContent = rest.simpleRequest(
                 "/servicesNS/nobody/{}/configs/conf-{}?output_mode=json".format(APP_NAME, CONF_FILE), sessionKey=self.getSessionKey())
+            
+            with open('/opt/splunk/etc/apps/uploader/local/logs.txt', 'a+') as f:
+                # TODO - Need to remove this
+                f.write("\n")
+                f.write("serverContent: " + str(serverContent))
+            
             data = json.loads(serverContent)['entry']
+
+            with open('/opt/splunk/etc/apps/uploader/local/logs.txt', 'a+') as f:
+                # TODO - Need to remove this
+                f.write("\n")
+                f.write("data: " + str(data))
+
             for i in data:
                 if i['name'] == STANZA_NAME:
                     self.savepath = i['content']['savepath']
                     self.pendingPath = i['content']['temppath']
                     break
         except Exception as e:
+            with open('/opt/splunk/etc/apps/uploader/local/logs.txt', 'a+') as f:
+                # TODO - Need to remove this
+                f.write("\n")
+                f.write("error in getting save path: " + str(e))
             logger.error(
                 "Unable to fetch file paths from uploader.conf file." + str(e))
             raise
@@ -57,6 +71,10 @@ class ServiceRestcall(admin.MConfigHandler):
     def action_list(self, conf_info):
         files = []
         savedFiles = []
+        with open('/opt/splunk/etc/apps/uploader/local/logs.txt', 'a+') as f:
+            # TODO - Need to remove this
+            f.write("\n")
+            f.write("save path: " + str(self.savepath))
         if os.path.exists(self.savepath):
             savedFiles = os.listdir(self.savepath)
 
@@ -68,9 +86,18 @@ class ServiceRestcall(admin.MConfigHandler):
                 size = os.path.getsize(saveFile)
             files.append({'name': fname, 'size': size,
                           'isFile': isFile, 'finished': True})
+        
+        with open('/opt/splunk/etc/apps/uploader/local/logs.txt', 'a+') as f:
+            # TODO - Need to remove this
+            f.write("\n")
+            f.write("saved files: " + str(files))
 
         pendingFiles = []
         if os.path.exists(self.pendingPath):
+            with open('/opt/splunk/etc/apps/uploader/local/logs.txt', 'a+') as f:
+                # TODO - Need to remove this
+                f.write("\n")
+                f.write("pending path: " + str(self.pendingPath))
             pendingFiles = os.listdir(self.pendingPath)
 
         for fname in pendingFiles:
@@ -97,13 +124,17 @@ class ServiceRestcall(admin.MConfigHandler):
                 if(fname):
                     files.append(
                         {'name': fname, 'size': size, 'isFile': isFile, 'finished': False, 'parts': parts})
+        
+        with open('/opt/splunk/etc/apps/uploader/local/logs.txt', 'a+') as f:
+            # TODO - Need to remove this
+            f.write("\n")
+            f.write("pending files: " + str(files))
 
-        conf_info['response']['files'] = files
-    
+        conf_info['response']['files'] = json.dumps(files)
+
     
     def action_remove(self, conf_info, fname):
-        fname = ''
-        os.remove(os.path.join(self.savepath))
+        os.remove(os.path.join(self.savepath, fname))
         conf_info['response']['file_name'] = fname
     
 
@@ -122,6 +153,7 @@ class ServiceRestcall(admin.MConfigHandler):
 
 
     def handleList(self, conf_info):
+        self.get_paths()
 
         data = json.loads(self.callerArgs['data'][0])
         action = data['action']

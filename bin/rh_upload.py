@@ -4,6 +4,7 @@ import logging
 import shutil
 import cgi
 import re
+import functools
 import urllib.parse as urlparse   # TODO - may be python3 only, need to check
 
 
@@ -40,7 +41,7 @@ class Upload(splunk.rest.BaseRestHandler):
                 except:
                     pass
 
-        files.sort(self.sortFiles)
+        files.sort(key = functools.cmp_to_key(self.sortFiles))   # This might work only in python3, python2 alternative OLD is  files.sort(self.sortFiles)
 
         for file in files:
             totalFiles = totalFiles+1
@@ -83,7 +84,7 @@ class Upload(splunk.rest.BaseRestHandler):
         self.response.setHeader('content-type', 'application/json')
         self.response.setStatus(error_code)
         if message:
-            response = json.dumps('{"message": {}}'.format(message))
+            response = json.dumps('{"message": "' + message + '"}')
             self.response.write(response)
 
 
@@ -92,7 +93,7 @@ class Upload(splunk.rest.BaseRestHandler):
         Use this function to provide response message
         """
         self.response.setHeader('content-type', 'application/json')
-        response = json.dumps('{"message": {}}'.format(message))
+        response = json.dumps('{"message": "' + message + '"}')
         self.response.write(response)
     
 
@@ -126,8 +127,19 @@ class Upload(splunk.rest.BaseRestHandler):
         logger.info("Just for testing, Vatsalllll.")
         # TODO - Need to remove above line.
 
-        content_type = self.request['headers']['content-type']
-        payload_in_parts = self.parse_payload(content_type, self.request['payload'])
+        payload_in_parts = None
+        if request_method == 'GET':
+            with open('/opt/splunk/etc/apps/uploader/local/logs.txt', 'a+') as f:
+                # TODO - Need to remove this
+                f.write("\n")
+                f.write("form: " + str(self.request['form']))
+                f.write("\n")
+                f.write("query: " + str(self.request['query']))
+            payload_in_parts = self.request['query']
+        elif request_method == 'POST':
+            # TODO - Below line only works with POST
+            content_type = self.request['headers']['content-type']
+            payload_in_parts = self.parse_payload(content_type, self.request['payload'])
         
         with open('/opt/splunk/etc/apps/uploader/local/logs.txt', 'a+') as f:
             # TODO - Need to remove this
@@ -138,43 +150,43 @@ class Upload(splunk.rest.BaseRestHandler):
         self.get_paths()
 
         resumableChunkNumber = ''
-        if resumableChunkNumber in payload_in_parts:
+        if 'resumableChunkNumber' in payload_in_parts:
             resumableChunkNumber = payload_in_parts['resumableChunkNumber']
 
         resumableChunkSize = ''
-        if resumableChunkSize in payload_in_parts:
+        if 'resumableChunkSize' in payload_in_parts:
             resumableChunkSize = payload_in_parts['resumableChunkSize']
 
         resumableCurrentChunkSize = ''
-        if resumableCurrentChunkSize in payload_in_parts:
+        if 'resumableCurrentChunkSize' in payload_in_parts:
             resumableCurrentChunkSize = payload_in_parts['resumableCurrentChunkSize']
 
         resumableFilename = ''
-        if resumableFilename in payload_in_parts:
+        if 'resumableFilename' in payload_in_parts:
             resumableFilename = payload_in_parts['resumableFilename']
 
         resumableIdentifier = ''
-        if resumableIdentifier in payload_in_parts:
+        if 'resumableIdentifier' in payload_in_parts:
             resumableIdentifier = payload_in_parts['resumableIdentifier']
 
         resumableRelativePath = ''
-        if resumableRelativePath in payload_in_parts:
+        if 'resumableRelativePath' in payload_in_parts:
             resumableRelativePath = payload_in_parts['resumableRelativePath']
 
         resumableTotalSize = ''
-        if resumableTotalSize in payload_in_parts:
+        if 'resumableTotalSize' in payload_in_parts:
             resumableTotalSize = payload_in_parts['resumableTotalSize']
 
         resumableType = ''
-        if resumableType in payload_in_parts:
+        if 'resumableType' in payload_in_parts:
             resumableType = payload_in_parts['resumableType']
         
         file = ''
-        if file in payload_in_parts:
+        if 'file' in payload_in_parts:
             file = payload_in_parts['file']
 
 
-        if resumableIdentifier:
+        if not resumableIdentifier:
             logger.error('resumableIdentifier expected in args')
             with open('/opt/splunk/etc/apps/uploader/local/logs.txt', 'a+') as f:
                 # TODO - Need to remove this
@@ -222,22 +234,34 @@ class Upload(splunk.rest.BaseRestHandler):
 
             # OLD - if isinstance(fs, cgi.FieldStorage):
             if file:
+                with open('/opt/splunk/etc/apps/uploader/local/logs.txt', 'a+') as f:
+                    # TODO - Need to remove this
+                    f.write("\n")
+                    f.write("File attribute present.")
                 if not os.path.exists(chunkDir):
                     try:
                         os.makedirs(chunkDir)
-                    except:
+                    except Exception as e:
+                        with open('/opt/splunk/etc/apps/uploader/local/logs.txt', 'a+') as f:
+                            # TODO - Need to remove this
+                            f.write("\n")
+                            f.write("Unable to create chunk dir. " + str(e))
                         logger.warning('failed creating directory '+chunkDir)
                         pass
 
                 if not os.path.exists(tempChunkDir):
                     try:
                         os.makedirs(tempChunkDir)
-                    except:
+                    except Exception as e:
+                        with open('/opt/splunk/etc/apps/uploader/local/logs.txt', 'a+') as f:
+                            # TODO - Need to remove this
+                            f.write("\n")
+                            f.write("Unable to create temp dir. " + str(e))
                         logger.warning(
                             'failed creating directory '+tempChunkDir)
                         pass
 
-                newFile = open(tempChunkFilePath, 'wb')
+                newFile = open(tempChunkFilePath, 'a+')
                 
                 '''
                 # OLD
