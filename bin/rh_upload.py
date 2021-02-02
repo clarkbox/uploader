@@ -1,11 +1,16 @@
+import sys
 import os
 import json
 import logging
 import shutil
-import cgi
 import re
-import functools
-import urllib.parse as urlparse   # TODO - may be python3 only, need to check
+if (sys.version_info > (3, 0)):
+     import functools   # only for python3
+
+try:
+    from urllib.parse import urlparse
+except ImportError:
+    from urlparse import urlparse
 
 
 import splunk
@@ -41,7 +46,10 @@ class Upload(splunk.rest.BaseRestHandler):
                 except:
                     pass
 
-        files.sort(key = functools.cmp_to_key(self.sortFiles))   # This might work only in python3, python2 alternative OLD is  files.sort(self.sortFiles)
+        if (sys.version_info > (3, 0)):
+            files.sort(key = functools.cmp_to_key(self.sortFiles))
+        else:
+            files.sort(self.sortFiles)
 
         for file in files:
             totalFiles = totalFiles+1
@@ -50,10 +58,8 @@ class Upload(splunk.rest.BaseRestHandler):
         if (totalFiles * int(resumableChunkSize) > (int(resumableTotalSize) - int(resumableChunkSize))):
             if not os.path.exists(self.savepath):
                 os.makedirs(self.savepath)
-            logger.warning('assembling ' + resumableFilename +
-                           ' from chunks in ' + tempDir)
-            destination = open(os.path.join(
-                self.savepath, resumableFilename), 'wb')
+            logger.warning('assembling ' + resumableFilename + ' from chunks in ' + tempDir)
+            destination = open(os.path.join(self.savepath, resumableFilename), 'wb')
             for chunk in chunks:
                 shutil.copyfileobj(open(chunk, 'rb'), destination)
             destination.close()
@@ -70,10 +76,10 @@ class Upload(splunk.rest.BaseRestHandler):
                 if i['name'] == STANZA_NAME:
                     self.savepath = i['content']['savepath']
                     self.pendingPath = i['content']['temppath']
+                    logger.info("Got savepath and pending path from uploader.conf. savepath={} pendingpath={}".format(self.savepath, self.pendingPath))
                     break
         except Exception as e:
-            logger.error(
-                "Unable to fetch file paths from uploader.conf file." + str(e))
+            logger.error("Unable to fetch file paths from uploader.conf file." + str(e))
             raise
     
 
@@ -86,15 +92,6 @@ class Upload(splunk.rest.BaseRestHandler):
         if message:
             response = json.dumps('{"message": "' + message + '"}')
             self.response.write(response)
-
-
-    def return_message(self, message, status_code=200):
-        """
-        Use this function to provide response message
-        """
-        self.response.setHeader('content-type', 'application/json')
-        response = json.dumps('{"message": "' + message + '"}')
-        self.response.write(response)
     
 
     def parse_payload(self, content_type, payload):
@@ -124,29 +121,15 @@ class Upload(splunk.rest.BaseRestHandler):
 
 
     def handle_request(self, request_method):
-        logger.info("Just for testing, Vatsalllll.")
-        # TODO - Need to remove above line.
 
         payload_in_parts = None
         if request_method == 'GET':
-            with open('/opt/splunk/etc/apps/uploader/local/logs.txt', 'a+') as f:
-                # TODO - Need to remove this
-                f.write("\n")
-                f.write("form: " + str(self.request['form']))
-                f.write("\n")
-                f.write("query: " + str(self.request['query']))
             payload_in_parts = self.request['query']
         elif request_method == 'POST':
-            # TODO - Below line only works with POST
             content_type = self.request['headers']['content-type']
             payload_in_parts = self.parse_payload(content_type, self.request['payload'])
-        
-        with open('/opt/splunk/etc/apps/uploader/local/logs.txt', 'a+') as f:
-            # TODO - Need to remove this
-            f.write("\n")
-            f.write("payload in parts: " + str(payload_in_parts))
 
-        
+        # Get save path and pending path        
         self.get_paths()
 
         resumableChunkNumber = ''
@@ -157,9 +140,12 @@ class Upload(splunk.rest.BaseRestHandler):
         if 'resumableChunkSize' in payload_in_parts:
             resumableChunkSize = payload_in_parts['resumableChunkSize']
 
+        """
+        # Unused variable
         resumableCurrentChunkSize = ''
         if 'resumableCurrentChunkSize' in payload_in_parts:
             resumableCurrentChunkSize = payload_in_parts['resumableCurrentChunkSize']
+        """
 
         resumableFilename = ''
         if 'resumableFilename' in payload_in_parts:
@@ -169,17 +155,23 @@ class Upload(splunk.rest.BaseRestHandler):
         if 'resumableIdentifier' in payload_in_parts:
             resumableIdentifier = payload_in_parts['resumableIdentifier']
 
+        """
+        # Unused variable
         resumableRelativePath = ''
         if 'resumableRelativePath' in payload_in_parts:
             resumableRelativePath = payload_in_parts['resumableRelativePath']
+        """
 
         resumableTotalSize = ''
         if 'resumableTotalSize' in payload_in_parts:
             resumableTotalSize = payload_in_parts['resumableTotalSize']
 
+        """
+        # Unused variable
         resumableType = ''
         if 'resumableType' in payload_in_parts:
             resumableType = payload_in_parts['resumableType']
+        """
         
         file = ''
         if 'file' in payload_in_parts:
@@ -188,10 +180,6 @@ class Upload(splunk.rest.BaseRestHandler):
 
         if not resumableIdentifier:
             logger.error('resumableIdentifier expected in args')
-            with open('/opt/splunk/etc/apps/uploader/local/logs.txt', 'a+') as f:
-                # TODO - Need to remove this
-                f.write("\n")
-                f.write("resumableIdentifier expected in args")
             self.raise_error(500, "resumableIdentifier expected in args")
             # OLD - raise cherrypy.HTTPError(500)
 
@@ -202,63 +190,37 @@ class Upload(splunk.rest.BaseRestHandler):
         tempChunkFilePath = os.path.join(tempChunkDir, chunkFileName)
 
         if request_method == 'GET':
+            logger.debug("rh_upload: GET request.")
             if os.path.exists(chunkFilePath):
-                with open('/opt/splunk/etc/apps/uploader/local/logs.txt', 'a+') as f:
-                    # TODO - Need to remove this
-                    f.write("\n")
-                    f.write("File exist")
-                return
-                # OLD - return self.render_json([0])
+                logger.info("File exist.")
+                return   # OLD - return self.render_json([0])
             else:
-                with open('/opt/splunk/etc/apps/uploader/local/logs.txt', 'a+') as f:
-                    # TODO - Need to remove this
-                    f.write("\n")
-                    f.write("File not found")
+                logger.info("rh_upload: file not found.")
                 self.raise_error(404, "Uploader: File not found.")
                 # OLD - raise cherrypy.HTTPError(404)
                 
         elif request_method == 'POST':
-            with open('/opt/splunk/etc/apps/uploader/local/logs.txt', 'a+') as f:
-                # TODO - Need to remove this
-                f.write("\n")
-                f.write("POST request")
+            logger.debug("rh_upload: POST request.")
 
             if(os.path.exists(os.path.join(self.savepath, resumableFilename))):
-                with open('/opt/splunk/etc/apps/uploader/local/logs.txt', 'a+') as f:
-                    # TODO - Need to remove this
-                    f.write("\n")
-                    f.write("File already exist.")
+                logger.warning("File {} already exist.".format(resumableFilename))
                 self.raise_error(500, 'File named ' + resumableFilename + ' exists.')
                 # OLD - cherrypy.response.status = 500
-                # return self.render_json({'errorcode': 1,'message':'File named '+ resumableFilename +' exists.' })
+                # OLD - return self.render_json({'errorcode': 1,'message':'File named '+ resumableFilename +' exists.' })
 
-            # OLD - if isinstance(fs, cgi.FieldStorage):
-            if file:
-                with open('/opt/splunk/etc/apps/uploader/local/logs.txt', 'a+') as f:
-                    # TODO - Need to remove this
-                    f.write("\n")
-                    f.write("File attribute present.")
+            if file:     # OLD - if isinstance(fs, cgi.FieldStorage):
                 if not os.path.exists(chunkDir):
                     try:
                         os.makedirs(chunkDir)
                     except Exception as e:
-                        with open('/opt/splunk/etc/apps/uploader/local/logs.txt', 'a+') as f:
-                            # TODO - Need to remove this
-                            f.write("\n")
-                            f.write("Unable to create chunk dir. " + str(e))
-                        logger.warning('failed creating directory '+chunkDir)
+                        logger.warning('failed creating directory '+chunkDir + ' Reason: ' + str(e))
                         pass
 
                 if not os.path.exists(tempChunkDir):
                     try:
                         os.makedirs(tempChunkDir)
                     except Exception as e:
-                        with open('/opt/splunk/etc/apps/uploader/local/logs.txt', 'a+') as f:
-                            # TODO - Need to remove this
-                            f.write("\n")
-                            f.write("Unable to create temp dir. " + str(e))
-                        logger.warning(
-                            'failed creating directory '+tempChunkDir)
+                        logger.warning('failed creating directory '+tempChunkDir + ' Reason: ' + str(e))
                         pass
 
                 newFile = open(tempChunkFilePath, 'a+')
@@ -279,14 +241,12 @@ class Upload(splunk.rest.BaseRestHandler):
 
                 self.createFileFromChunks(
                     chunkDir, resumableFilename, resumableChunkSize, resumableTotalSize)
+            else:
+                logger.error("File attribute not present in the POST request.")
         else:
-            with open('/opt/splunk/etc/apps/uploader/local/logs.txt', 'a+') as f:
-                # TODO - Need to remove this
-                f.write("\n")
-                f.write("method not implemented.")
+            logger.error("HTTP Method not implemented.")
             self.raise_error(404, "Uploader: This method is not implemented.")
             # OLD - raise cherrypy.HTTPError(404)
-            # TODO - Check OLD to before final review
 
 
     def handle_GET(self):

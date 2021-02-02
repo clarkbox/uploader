@@ -1,11 +1,10 @@
 require([
     'jquery',
     'underscore',
-    'splunkjs/mvc/utils',
     'splunkjs/mvc',
     'splunkjs/mvc/searchmanager',
     'splunkjs/mvc/simplexml/ready!'
-], function ($, underscore, utils, mvc, SearchManager) {
+], function ($, underscore, mvc, SearchManager) {
 
     let formkey = document.cookie.match(/splunkweb_csrf_token_8000=(\d+)/)[1];  // OLD - `${utils.getFormKey()|h}`
 
@@ -67,9 +66,9 @@ require([
         pendingList = $('.pendingFiles'),
         fileProgressStates = {},
         paused = false,
-        statusUrl = '/en-US/splunkd/__raw/servicesNS/-/uploader/upload',   // OLD - Splunk.util.make_url('uploader','upload'),
+        statusUrl = Splunk.util.make_url('/splunkd/__raw/servicesNS/-/uploader/upload'),
         managerIndexLink = '/manager/uploader/data/inputs/monitor/_new' +
-        '?action=edit&redirect_override_cancel=%2Fmanager%2Fuploader%2Fdatainputstats&def.spl-ctrl_sourcetypeSelect=auto&def.spl-ctrl_switcher=oneshot&def.spl-ctrl_EnableAdvanced=1&app_only=False&preflight=preview&def.name='
+                           '?action=edit&redirect_override_cancel=%2Fmanager%2Fuploader%2Fdatainputstats&def.spl-ctrl_sourcetypeSelect=auto&def.spl-ctrl_switcher=oneshot&def.spl-ctrl_EnableAdvanced=1&app_only=False&preflight=preview&def.name='
 
     var updateSize = underscore.debounce(function(){
         $('.uploading-wrapper').find('.totalSize').text(humanFileSize(r.getSize()));
@@ -228,7 +227,6 @@ require([
     });
 
     btnPauseAll.on('click', function(){
-        debugger;
         if(!paused){
             r.pause();
             btnPauseAll.addClass('active');
@@ -242,7 +240,6 @@ require([
     });
 
     btnCancelAll.on('click', function(){
-        debugger;
         fileList.find('.file').each(function(i, elm){
             elm.remove();
         });
@@ -270,7 +267,6 @@ require([
     });
 
     btnDeleteAll.on('click', function(){
-        debugger;
         if(confirm('Are you sure you want to\nDELETE ALL UPLOADED FILES on the server?')){
             let service = mvc.createService();
             let data = {
@@ -278,9 +274,7 @@ require([
             }
             data = JSON.stringify(data);
             service.get("/service", {"data": data}, function(error, response){
-                debugger;
                 if (error){
-                    // TODO - Check proper value for error and response
                     alert('There was an error while deleting. Check _internal logs for more info.');
                 }
                 else{
@@ -291,7 +285,6 @@ require([
     });
 
     finishedList.on('click', '.btnAbort', function(event){
-        debugger;
         var target = $(event.target);
         var fileElm = target.closest('.file');
         var fileName = fileElm.data('filename');
@@ -304,10 +297,8 @@ require([
             }
             data = JSON.stringify(data);
             service.get("/service", {"data": data}, function(error, response){
-                debugger;
                 if (error){
-                    // TODO - Check proper value for error and response
-                    alert('There was an error while deleting. Check web_service.log for more info.');
+                    alert('There was an error while deleting. Check _internal logs for more info.');
                 }
                 else{
                     fileElm.remove();
