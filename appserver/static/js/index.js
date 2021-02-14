@@ -1,11 +1,62 @@
-$(document).ready(function(){
+require([
+    'jquery',
+    'underscore',
+    'splunkjs/mvc',
+    'splunkjs/mvc/searchmanager',
+    'splunkjs/mvc/simplexml/ready!'
+], function ($, underscore, mvc, SearchManager) {
 
-    var underscore = window._lodash;
+    let formkey = document.cookie.match(/splunkweb_csrf_token_8000=(\d+)/)[1];  // OLD - `${utils.getFormKey()|h}`
+
+    let savePath = "";
+    // Defining search and search manager
+    var searchString = '| rest /servicesNS/-/uploader/configs/conf-uploader/paths splunk_server=local | search "eai:acl.app"="uploader" | table savepath, temppath';
+    var searchManager = new SearchManager({
+        preview: true,
+        autostart: true,
+        search: searchString,
+        cache: false
+    });
+    // Processing results search manager.
+    var searchManagerResults = searchManager.data("results", {count: 0});
+    searchManagerResults.on('data', function () {
+        if (searchManagerResults.data()) {
+            $.each(searchManagerResults.data().rows, function (index, row) {
+                savePath = row[0];  // savepath
+            });
+        }
+    });
+
     underscore.templateSettings = {
       interpolate: /\{\{(.+?)\}\}/g
     };
-    var fileItemTemplate = $('#fileTemplate').html(),
-        fileTemplate = underscore.template(fileItemTemplate),
+
+    let fileItemTemplate = `
+    <div class="file">
+        <div class="details">
+            <div class="splunk-components" style="float: right">
+                <button type="button" class="btn btn-default btnRetry" style="display:none;" tooltip="Retry">
+                    <span class="icon-rotate"></span>
+                </button>
+                <button type="button" class="btn btn-default btnAbort" tooltip="Cancel">
+                    <span class="icon-close"></span>
+                </button>
+            </div>
+            <div>
+                <span class="name">{{name}}</span>
+                <span class="size">{{size}}</span>
+            </div>
+        </div>
+        <div class="progressout">
+            <div class="progress"></div>
+            <div class="speed"></div>
+        </div>
+        <div class="message"></div>
+    </div>
+    `;
+    // OLD - var fileItemTemplate = $('#fileTemplate').html(),
+
+    var fileTemplate = underscore.template(fileItemTemplate),
         fileList = $('.uploadingFiles'),
         btnPauseAll = $('.btnPauseAll'),
         btnCancelAll = $('.btnStopAll'),
@@ -15,16 +66,28 @@ $(document).ready(function(){
         pendingList = $('.pendingFiles'),
         fileProgressStates = {},
         paused = false,
-        statusUrl = Splunk.util.make_url('custom','uploader','upload'),
+        statusUrl = Splunk.util.make_url('/splunkd/__raw/servicesNS/-/uploader/upload'),
         managerIndexLink = '/manager/uploader/data/inputs/monitor/_new' +
-        '?action=edit&redirect_override_cancel=%2Fmanager%2Fuploader%2Fdatainputstats&def.spl-ctrl_sourcetypeSelect=auto&def.spl-ctrl_switcher=oneshot&def.spl-ctrl_EnableAdvanced=1&app_only=False&preflight=preview&def.name='
+                           '?action=edit&redirect_override_cancel=%2Fmanager%2Fuploader%2Fdatainputstats&def.spl-ctrl_sourcetypeSelect=auto&def.spl-ctrl_switcher=oneshot&def.spl-ctrl_EnableAdvanced=1&app_only=False&preflight=preview&def.name='
 
     var updateSize = underscore.debounce(function(){
         $('.uploading-wrapper').find('.totalSize').text(humanFileSize(r.getSize()));
     },500);
 
     var updateServerFileList = underscore.debounce(function(){
-        $.ajax('/custom/uploader/service/list').done(function(files){
+        let service = mvc.createService();
+        let data = {
+            "action": "list"
+        }
+        data = JSON.stringify(data);
+        service.get("/service", {"data": data}, function(error, response){
+            if (error){
+                console.error("Error in getting file list.");
+                console.error(error);
+                return;
+            }
+            let files = JSON.parse(response.data.entry[0].content.files);
+            
             finishedList.empty();
             pendingList.empty();
             var size = [0,0];
@@ -37,6 +100,7 @@ $(document).ready(function(){
                 if(file.finished){
                     size[0] = size[0]+file.size;
                     finishedList.append(fileElm);
+
                     var path = savePath + '/' + file.name;
                     var link = managerIndexLink + encodeURIComponent(path);
                     fileElm.append('<div class="indexLink"><a href="'+link+'" target="_new">Index this file in Splunk...</a></div>');
@@ -54,7 +118,7 @@ $(document).ready(function(){
 
     var r = new Resumable({
         target: statusUrl,
-        query: {'splunk_form_key':formkey},
+        headers: {'X-Requested-With': 'XMLHttpRequest', 'X-Splunk-Form-Key': formkey},   // OLD - query: {'splunk_form_key':formkey},
         chunkSize: 5*1024*1024
     });
 
@@ -150,7 +214,7 @@ $(document).ready(function(){
         if(message.errorcode>0 && message.message){
             file.elm.find('.message').text('Upload Failed. '+ message.message);
         }else{
-            file.elm.find('.message').text('Upload Failed. Check web_service.log for error details.');
+            file.elm.find('.message').text('Upload Failed. Check _internal logs for error details.');
         }
 
         file.elm.find('.btnRetry').show();
@@ -186,20 +250,36 @@ $(document).ready(function(){
 
     btnPurgePending.on('click', function(){
         if(confirm('Are you sure you want to\nDELETE ALL PENDING UPLOADS on the server?')){
-            $.ajax('/custom/uploader/service/removepending').done(function(){
-                updateServerFileList();
-            }).error(function(){
-                alert('There was an error while deleting. Check web_service.log for more info.');
+            let service = mvc.createService();
+            let data = {
+                "action": "removepending"
+            }
+            data = JSON.stringify(data);
+            service.get("/service", {"data": data}, function(error, response){
+                if (error){
+                    alert('There was an error while deleting. Check _internal logs for more info.');
+                }
+                else{
+                    updateServerFileList();
+                }
             });
         }
     });
 
     btnDeleteAll.on('click', function(){
         if(confirm('Are you sure you want to\nDELETE ALL UPLOADED FILES on the server?')){
-            $.ajax('/custom/uploader/service/removeall').done(function(){
-                updateServerFileList();
-            }).error(function(){
-                alert('There was an error while deleting. Check web_service.log for more info.');
+            let service = mvc.createService();
+            let data = {
+                "action": "removeall"
+            }
+            data = JSON.stringify(data);
+            service.get("/service", {"data": data}, function(error, response){
+                if (error){
+                    alert('There was an error while deleting. Check _internal logs for more info.');
+                }
+                else{
+                    updateServerFileList();
+                }
             });
         }
     });
@@ -210,10 +290,19 @@ $(document).ready(function(){
         var fileName = fileElm.data('filename');
 
         if(confirm('Are you sure you want to delete '+ fileName)){
-            $.ajax('/custom/uploader/service/remove/'+ fileName).done(function(){
-                fileElm.remove();
-            }).error(function(){
-                alert('There was an error while deleting. Check web_service.log for more info.');
+            let service = mvc.createService();
+            let data = {
+                "action": "remove",
+                "filename": fileName
+            }
+            data = JSON.stringify(data);
+            service.get("/service", {"data": data}, function(error, response){
+                if (error){
+                    alert('There was an error while deleting. Check _internal logs for more info.');
+                }
+                else{
+                    fileElm.remove();
+                }
             });
         }
     });
@@ -230,5 +319,4 @@ $(document).ready(function(){
         } while(bytes >= thresh);
         return bytes.toFixed(1)+' '+units[u];
     }
-
 });
